@@ -22,6 +22,9 @@ class TeamplayContext:
     opponent_fastest_intercept: Optional[Intercept]
     danger: float
     time_advantage: float
+    open_attack_window: float
+    teammate_commit_density: float
+    opportunity_score_by_id: Dict[int, float]
 
 
 def adaptive_aggression(info: GameInfo, my_car: Car) -> float:
@@ -74,6 +77,40 @@ def build_context(info: GameInfo, team_cars: List[Car]) -> TeamplayContext:
 
     role_by_id = {car_id: idx for idx, car_id in enumerate(role_order)}
 
+    if opponent_fastest is not None:
+        opponent_time = opponent_fastest.time
+    else:
+        opponent_time = attacker_intercept.time + 2.0
+
+    def opportunity_score(car: Car) -> float:
+        intercept = intercepts_by_id[car.id]
+        lane_quality = clamp01((align(car.position, intercept.ball, their_goal) + 0.35) / 1.35)
+        opponent_time_edge = clamp01((opponent_time - intercept.time + 0.20) / 1.10)
+        attacker_time_edge = clamp01((attacker_intercept.time - intercept.time + 0.15) / 0.85)
+        boost_bonus = clamp01((car.boost - 8) / 70)
+        depth_bonus = clamp01((ground_distance(intercept, my_goal) - 2300) / 4600)
+        return clamp01(
+            opponent_time_edge * 0.34
+            + attacker_time_edge * 0.28
+            + lane_quality * 0.20
+            + boost_bonus * 0.10
+            + depth_bonus * 0.08
+        )
+
+    opportunity_score_by_id = {car.id: opportunity_score(car) for car in team_cars}
+    open_attack_window = max(opportunity_score_by_id.values()) if opportunity_score_by_id else 0.0
+
+    if len(team_cars) > 1:
+        likely_committers = sum(
+            1
+            for car in team_cars
+            if intercepts_by_id[car.id].time <= attacker_intercept.time + 0.20
+            and opportunity_score_by_id[car.id] > 0.52
+        )
+        teammate_commit_density = clamp01((max(0, likely_committers - 1)) / (len(team_cars) - 1))
+    else:
+        teammate_commit_density = 0.0
+
     goal_pressure = clamp01((4200 - ground_distance(info.ball, my_goal)) / 4200)
     if opponent_fastest is not None:
         time_pressure = clamp01((attacker_intercept.time - opponent_fastest.time + 0.30) / 1.20)
@@ -96,6 +133,9 @@ def build_context(info: GameInfo, team_cars: List[Car]) -> TeamplayContext:
         opponent_fastest_intercept=opponent_fastest,
         danger=danger,
         time_advantage=time_advantage,
+        open_attack_window=open_attack_window,
+        teammate_commit_density=teammate_commit_density,
+        opportunity_score_by_id=opportunity_score_by_id,
     )
 
 
@@ -115,6 +155,8 @@ def should_take_over_attack(
     context: TeamplayContext,
     car: Car,
     commit_window: float,
+    takeover_threshold: float = 0.58,
+    takeover_bias: float = 0.0,
 ) -> bool:
     role = context.role_by_id.get(car.id, 99)
     if role == 0:
@@ -122,8 +164,25 @@ def should_take_over_attack(
 
     my_intercept = context.intercepts_by_id[car.id]
     attacker_intercept = context.attacker_intercept
+    my_score = context.opportunity_score_by_id.get(car.id, 0.0)
+    attacker_score = context.opportunity_score_by_id.get(context.attacker_id, 0.0)
+    threshold = clamp01(takeover_threshold - takeover_bias * 0.12)
 
     if my_intercept.time + commit_window < attacker_intercept.time:
+        return True
+
+    if (
+        my_score > attacker_score + 0.12
+        and my_intercept.time < attacker_intercept.time + commit_window * 0.65
+    ):
+        return True
+
+    if (
+        context.open_attack_window >= threshold
+        and my_score >= threshold
+        and context.teammate_commit_density < 0.70
+        and (role <= 1 or context.danger < 0.60)
+    ):
         return True
 
     if context.danger > 0.72 and role == 1 and my_intercept.time < attacker_intercept.time + commit_window * 0.5:
@@ -157,10 +216,13 @@ def support_distance_for_role(info: GameInfo, context: TeamplayContext, my_car: 
 
     aggression = adaptive_aggression(info, my_car)
     rotation = info.settings.skill.rotation_discipline
+    human_style = info.settings.human_style
 
     base -= (aggression - 0.5) * 700
     base += (0.70 - rotation) * 600
     base += context.danger * 900
+    base -= (human_style.decisiveness - 0.5) * 220
+    base += human_style.mistake_rate * 220
 
     if role >= 2 and info.settings.teamplay.conservative_last_man:
         base += (1.0 - aggression) * 500
@@ -172,6 +234,10 @@ def is_safe_to_detour_for_boost(info: GameInfo, context: TeamplayContext, car: C
     my_intercept = context.intercepts_by_id[car.id]
     if context.opponent_fastest_intercept is None:
         return True
+
+    human_style = info.settings.human_style
+    if context.open_attack_window > 0.64 + human_style.takeover_bias * 0.08:
+        return False
 
     time_buffer = context.opponent_fastest_intercept.time - my_intercept.time
     risk = info.settings.teamplay.boost_detour_risk * info.settings.skill.decision_making

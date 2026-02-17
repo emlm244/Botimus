@@ -26,7 +26,8 @@ class DoubleTouch(Maneuver):
         self.info.predict_ball(duration=4.0)
         for i in range(0, len(self.info.ball_predictions), 5):
             ball = self.info.ball_predictions[i]
-            if ball.position[2] < 500: break
+            if ball.position[2] < 500:
+                break
             self.aerial.target_position = ball.position - direction(ball, self.aerial_strike.target) * 80
             self.aerial.arrival_time = ball.time
             final_car = AerialStrike.simulate_flight(self.car, self.aerial, self._flight_path)
@@ -40,7 +41,8 @@ class DoubleTouch(Maneuver):
             self.aerial.step(dt)
             self.controls = self.aerial.controls
             self.finished = self.aerial.finished
-            if self.car.on_ground: self.finished = True
+            if self.car.on_ground:
+                self.finished = True
 
         else:
             self.aerial_strike.step(dt)

@@ -18,7 +18,7 @@ class AimDodge(AirDodge):
     def step(self, dt):
         super().step(dt)
 
-        if not self.jump.finished and not self.car.on_ground:
+        if not self.jump.finished and not self.car.on_ground and self.target is not None:
             target_direction = direction(self.car, self.target + vec3(0, 0, 200))
             up = target_direction * (-1)
             up[2] = 1

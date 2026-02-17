@@ -6,7 +6,11 @@ from tools.intercept import estimate_time
 from tools.vector_math import distance
 
 
-def choose_boostpad_to_pickup(info: GameInfo, car: Car, forbidden_pads: Set[BoostPad] = None) -> Optional[BoostPad]:
+def choose_boostpad_to_pickup(
+    info: GameInfo,
+    car: Car,
+    forbidden_pads: Optional[Set[BoostPad]] = None,
+) -> Optional[BoostPad]:
     if forbidden_pads is None:
         forbidden_pads = set()
 
@@ -24,3 +28,24 @@ def choose_boostpad_to_pickup(info: GameInfo, car: Car, forbidden_pads: Set[Boos
 
     # and pick the closest valid pad to that position
     return min(valid_pads, key=lambda pad: distance(pad.position, pos))
+
+
+def compute_low_boost_threshold(
+    *,
+    skill_overall: float,
+    mistake_rate: float,
+    decisiveness: float,
+    base: float,
+    overall_scale: float,
+    mistake_scale: float,
+    decisiveness_scale: float,
+    min_value: int,
+    max_value: int,
+) -> int:
+    threshold = int(
+        base
+        + (1.0 - skill_overall) * overall_scale
+        + mistake_rate * mistake_scale
+        - decisiveness * decisiveness_scale
+    )
+    return max(min_value, min(max_value, threshold))

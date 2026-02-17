@@ -1,0 +1,25 @@
+{
+  "include": [
+    "agent.py",
+    "data",
+    "maneuvers",
+    "scripts",
+    "strategy",
+    "tools"
+  ],
+  "exclude": [
+    "rlutilities",
+    "**/__pycache__",
+    ".ruff_cache",
+    ".pytest_cache",
+    "logs"
+  ],
+  "typeCheckingMode": "standard",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none",
+  "reportOptionalMemberAccess": "none",
+  "reportAttributeAccessIssue": "none",
+  "reportArgumentType": "none",
+  "reportIncompatibleMethodOverride": "none",
+  "reportCallIssue": "none"
+}

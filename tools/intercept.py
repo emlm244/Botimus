@@ -1,8 +1,8 @@
 import math
-from typing import Optional
+from typing import Callable, Optional, Sequence
 
 from data.acceleration_lut import BOOST, THROTTLE
-from rlutilities.linear_algebra import norm, angle_between, dot
+from rlutilities.linear_algebra import angle_between, dot, norm
 from rlutilities.mechanics import Drive
 from rlutilities.simulation import Car, Ball
 
@@ -10,11 +10,20 @@ from tools.vector_math import direction, ground, ground_distance
 
 
 class Intercept:
-    def __init__(self, car: Car, ball_predictions, predicate: callable = None, ignore_time_estimate=False, backwards=False):
-        self.ball: Optional[Ball] = None
+    def __init__(
+        self,
+        car: Car,
+        ball_predictions: Sequence[Ball],
+        predicate: Optional[Callable[[Car, Ball], bool]] = None,
+        ignore_time_estimate: bool = False,
+        backwards: bool = False,
+    ):
+        self.ball: Ball = Ball()
+        self.ball.time = math.inf
         self.car: Car = car
-        self.is_viable = True
-        self.predicate_later_than_time = False  # whether the time constraint was satisfied sooner than the predicate
+        self.is_viable: bool = True
+        self.predicate_later_than_time: bool = False  # whether the time constraint was satisfied sooner than the predicate
+        found_ball = False
 
         for i in range(0, len(ball_predictions), 3):
             ball = ball_predictions[i]
@@ -22,33 +31,34 @@ class Intercept:
             if time < ball.time - car.time or ignore_time_estimate:
                 if predicate is None or predicate(car, ball):
                     self.ball = ball
+                    found_ball = True
                     break
                 self.predicate_later_than_time = True
             else:
                 self.predicate_later_than_time = False
 
         # if no slice is found, use the last one
-        if self.ball is None:
-            if not ball_predictions:
-                self.ball = Ball()
-                self.ball.time = math.inf
-            else:
+        if not found_ball:
+            if ball_predictions:
                 self.ball = ball_predictions[-1]
             self.is_viable = False
-
         self.time = self.ball.time
         self.ground_pos = ground(self.ball.position)
         self.position = self.ball.position
 
 
-def estimate_time(car: Car, target, dd=1) -> float:
+def estimate_time(car: Car, target, dd: int = 1) -> float:
     turning_radius = 1 / Drive.max_turning_curvature(norm(car.velocity) + 500)
     turning = angle_between(car.forward() * dd, direction(car, target)) * turning_radius / 1800
-    if turning < 0.5: turning = 0
+    if turning < 0.5:
+        turning = 0
 
     dist = ground_distance(car, target) - 200
-    if dist < 0: return turning
-    speed = dot(car.velocity, car.forward())
+    if dist < 0:
+        return turning
+    speed = dot(car.velocity, car.forward()) * dd
+    if speed <= 1:
+        speed = max(norm(car.velocity), 600.0)
 
     time = 0
     result = None
@@ -66,6 +76,6 @@ def estimate_time(car: Car, target, dd=1) -> float:
         speed = result.speed_reached
 
     if result is None or not result.distance_limit_reached:
-        time += dist / speed
+        time += dist / max(speed, 1.0)
 
     return time * 1.05 + turning

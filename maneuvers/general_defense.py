@@ -7,7 +7,7 @@ from rlutilities.simulation import Car, BoostPadState
 from tools.arena import Arena
 from tools.drawing import DrawingTool
 from tools.game_info import GameInfo
-from tools.vector_math import nearest_point, farthest_point, ground_distance, ground_direction, ground, angle_to, \
+from tools.vector_math import nearest_point, ground_distance, ground_direction, ground, angle_to, \
     distance, angle_between
 
 
@@ -21,6 +21,9 @@ class GeneralDefense(Maneuver):
     """
 
     DURATION = 0.5
+    TURN_MIN_DURATION = 0.18
+    TURN_START_ANGLE = 0.34
+    TURN_END_ANGLE = 0.16
 
     BOOST_LOOK_RADIUS = 1200
     BOOST_LOOK_ANGLE = 0.5
@@ -30,6 +33,11 @@ class GeneralDefense(Maneuver):
 
         self.info = info
         self.face_target = face_target
+        human_style = info.settings.human_style
+        self.duration = self.DURATION + human_style.role_stability * 0.18
+        hysteresis = max(0.0, min(0.6, human_style.defense_turn_hysteresis))
+        self.turn_start_angle = self.TURN_START_ANGLE + hysteresis * 0.22
+        self.turn_end_angle = max(0.05, self.TURN_END_ANGLE + hysteresis * 0.10)
 
         dist = min(distance_from_target, ground_distance(face_target, self.info.my_goal.center) - 50)
         target_pos = ground(face_target) + ground_direction(face_target, self.info.my_goal.center) * dist
@@ -39,8 +47,14 @@ class GeneralDefense(Maneuver):
         points = target_pos + vec3(side_shift, 0, 0), target_pos - vec3(side_shift, 0, 0)
         if abs(self.car.position.x) > 3000:
             force_nearest = True
-        target_pos = nearest_point(face_target, points) if near_goal or force_nearest else farthest_point(face_target,
-                                                                                                          points)
+        if near_goal or force_nearest:
+            target_pos = nearest_point(face_target, points)
+        else:
+            side_hint = 1 if car.position[0] >= 0 else -1
+            target_pos = points[0] if side_hint > 0 else points[1]
+            other = points[1] if side_hint > 0 else points[0]
+            if ground_distance(car, target_pos) > ground_distance(car, other) + 1600:
+                target_pos = other
         if abs(face_target[0]) < 1000 or ground_distance(car, face_target) < 1000:
             target_pos = nearest_point(car.position, points)
         target_pos = Arena.clamp(target_pos, 500)
@@ -51,6 +65,8 @@ class GeneralDefense(Maneuver):
         self.stop = Stop(car)
 
         self.start_time = car.time
+        self.turning_to_face = False
+        self.turn_commit_until = car.time
 
         self.pad = None
 
@@ -62,10 +78,22 @@ class GeneralDefense(Maneuver):
         self.travel.step(dt)
 
         if self.travel.finished:
+            angle_error = angle_to(self.car, self.face_target)
+            should_turn = False
+            if self.turning_to_face:
+                should_turn = angle_error > self.turn_end_angle or self.car.time < self.turn_commit_until
+                if not should_turn:
+                    self.turning_to_face = False
+            else:
+                should_turn = angle_error > self.turn_start_angle
+                if should_turn:
+                    self.turning_to_face = True
+                    self.turn_commit_until = self.car.time + self.TURN_MIN_DURATION
+
             # turn around to face the target direction
-            if angle_to(self.car, self.face_target) > 0.3:
+            if should_turn:
                 self.drive.target_pos = self.face_target
-                self.drive.target_speed = 1000
+                self.drive.target_speed = 450 if ground_distance(self.car, self.face_target) < 1100 else 900
                 self.drive.step(dt)
                 self.controls = self.drive.controls
                 self.controls.handbrake = False
@@ -99,9 +127,10 @@ class GeneralDefense(Maneuver):
                 self.controls = self.travel.controls
 
         # don't waste boost during downtime
-        if self.car.boost < 100 and ground_distance(self.car, self.travel.target) < 4000: self.controls.boost = False
+        if self.car.boost < 100 and ground_distance(self.car, self.travel.target) < 4000:
+            self.controls.boost = False
 
-        self.finished = self.travel.driving and self.car.time > self.start_time + self.DURATION
+        self.finished = self.travel.driving and self.car.time > self.start_time + self.duration
 
     def render(self, draw: DrawingTool):
         self.travel.render(draw)

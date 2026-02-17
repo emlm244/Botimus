@@ -1,7 +1,7 @@
 import math
 
 from maneuvers.maneuver import Maneuver
-from rlutilities.linear_algebra import vec3, dot, normalize
+from rlutilities.linear_algebra import vec3, dot, norm
 from tools.arena import Arena
 from tools.drawing import DrawingTool
 from tools.math import abs_clamp, clamp11, clamp
@@ -17,9 +17,11 @@ class Drive(Maneuver):
         self.target_speed = target_speed
         self.backwards = backwards
         self.drive_on_walls = False
+        self.deadband_applied = False
 
     def step(self, dt):
         target = self.target_pos
+        self.deadband_applied = False
 
         # don't try driving outside the arena
         target = Arena.clamp(target, 100)
@@ -45,14 +47,18 @@ class Drive(Maneuver):
         self.controls.steer = clamp11(2.5 * phi)
 
         # powersliding
-        self.controls.handbrake = 0
+        self.controls.handbrake = False
+        forward_alignment = 1.0
+        car_speed = norm(self.car.velocity)
+        if car_speed > 1:
+            forward_alignment = dot(self.car.velocity / car_speed, self.car.forward())
         if (
                 abs(phi) > 1.5
                 and self.car.position[2] < 300
                 and (ground_distance(self.car, target) < 3500 or abs(self.car.position[0]) > 3500)
-                and dot(normalize(self.car.velocity), self.car.forward()) > 0.85
+                and forward_alignment > 0.85
         ):
-            self.controls.handbrake = 1
+            self.controls.handbrake = True
 
         # forward velocity
         vf = dot(self.car.velocity, self.car.forward())
@@ -60,12 +66,21 @@ class Drive(Maneuver):
             vf *= -1
 
         # speed controller
-        if vf < self.target_speed:
+        speed_error = self.target_speed - vf
+        if (
+                abs(speed_error) < 90
+                and abs(phi) < 0.35
+            and self.target_speed < 1300
+        ):
+            self.deadband_applied = True
+            self.controls.throttle = 0.0 if self.target_speed < 200 else 0.15
+            self.controls.boost = False
+        elif vf < self.target_speed:
             self.controls.throttle = 1.0
-            if self.target_speed > 1400 and vf < 2250 and self.target_speed - vf > 50:
-                self.controls.boost = 1
+            if self.target_speed > 1400 and vf < 2250 and speed_error > 50:
+                self.controls.boost = True
             else:
-                self.controls.boost = 0
+                self.controls.boost = False
         else:
             if (vf - self.target_speed) > 400:  # 75
                 self.controls.throttle = -1.0
@@ -74,18 +89,18 @@ class Drive(Maneuver):
                     self.controls.throttle = 0.0
                 else:
                     self.controls.throttle = 0.01
-            self.controls.boost = 0
+            self.controls.boost = False
 
         # backwards driving
         if self.backwards:
             self.controls.throttle *= -1
             self.controls.steer *= -1
-            self.controls.boost = 0
-            self.controls.handbrake = 0
+            self.controls.boost = False
+            self.controls.handbrake = False
 
         # don't boost if not facing target
         if abs(phi) > 0.3:
-            self.controls.boost = 0
+            self.controls.boost = False
 
         # finish when close
         if distance(self.car, self.target_pos) < 100:

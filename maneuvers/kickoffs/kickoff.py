@@ -1,3 +1,5 @@
+from typing import Optional
+
 from maneuvers.driving.drive import Drive
 from maneuvers.maneuver import Maneuver
 from rlutilities.linear_algebra import vec3, sgn
@@ -31,8 +33,12 @@ class Kickoff(Maneuver):
         if any(distance(self.info.ball, opponent) < 1500 for opponent in self.info.get_opponents()):
             return
 
-        self.phase = "anti-fake-kickoff"
-        self.action = self.drive
+        self.set_phase_action("anti-fake-kickoff", self.drive)
+
+    def set_phase_action(self, phase, action: Optional[Maneuver] = None):
+        self.phase = phase
+        if action is not None:
+            self.action = action
 
     def step(self, dt: float):
         if self.phase == "anti-fake-kickoff":
