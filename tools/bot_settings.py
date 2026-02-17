@@ -10,6 +10,10 @@ def _clamp01(value: float) -> float:
     return max(0.0, min(1.0, value))
 
 
+def _clamp(value: float, lower: float, upper: float) -> float:
+    return max(lower, min(upper, value))
+
+
 @dataclass(frozen=True)
 class SkillProfile:
     preset: str
@@ -48,11 +52,39 @@ class TeamplaySettings:
 
 
 @dataclass(frozen=True)
+class HumanStyleSettings:
+    decisiveness: float
+    takeover_bias: float
+    role_stability: float
+    commit_hold_time: float
+    touch_reset_resist: float
+    mistake_rate: float
+    mechanical_variance: float
+    defense_turn_hysteresis: float
+    support_repath_cooldown: float
+
+
+@dataclass(frozen=True)
+class DiagnosticsSettings:
+    enabled: bool
+    mode: str
+    root_dir: str
+    flush_every: int
+    reset_on_start: bool
+    log_every_tick: bool
+    top_k_alternatives: int
+    include_snapshots: bool
+    include_opponent_cars: bool
+
+
+@dataclass(frozen=True)
 class BotSettings:
     reload_interval: float
     skill: SkillProfile
     object_mode: ObjectModeSettings
     teamplay: TeamplaySettings
+    human_style: HumanStyleSettings
+    diagnostics: DiagnosticsSettings
 
 
 _SKILL_PRESETS: Dict[str, SkillProfile] = {
@@ -63,6 +95,86 @@ _SKILL_PRESETS: Dict[str, SkillProfile] = {
     "diamond": SkillProfile("diamond", 0.70, 0.72, 0.72, 0.62, 0.74, 0.76, 0.70),
     "champion": SkillProfile("champion", 0.82, 0.84, 0.84, 0.67, 0.80, 0.84, 0.82),
     "grand_champion": SkillProfile("grand_champion", 0.92, 0.94, 0.94, 0.70, 0.86, 0.90, 0.92),
+}
+
+_HUMAN_STYLE_PRESETS: Dict[str, HumanStyleSettings] = {
+    "bronze": HumanStyleSettings(
+        decisiveness=0.34,
+        takeover_bias=0.08,
+        role_stability=0.35,
+        commit_hold_time=0.30,
+        touch_reset_resist=0.18,
+        mistake_rate=0.68,
+        mechanical_variance=0.70,
+        defense_turn_hysteresis=0.18,
+        support_repath_cooldown=0.24,
+    ),
+    "silver": HumanStyleSettings(
+        decisiveness=0.42,
+        takeover_bias=0.10,
+        role_stability=0.42,
+        commit_hold_time=0.34,
+        touch_reset_resist=0.24,
+        mistake_rate=0.58,
+        mechanical_variance=0.60,
+        defense_turn_hysteresis=0.16,
+        support_repath_cooldown=0.26,
+    ),
+    "gold": HumanStyleSettings(
+        decisiveness=0.52,
+        takeover_bias=0.11,
+        role_stability=0.50,
+        commit_hold_time=0.38,
+        touch_reset_resist=0.31,
+        mistake_rate=0.46,
+        mechanical_variance=0.48,
+        defense_turn_hysteresis=0.14,
+        support_repath_cooldown=0.28,
+    ),
+    "platinum": HumanStyleSettings(
+        decisiveness=0.60,
+        takeover_bias=0.12,
+        role_stability=0.60,
+        commit_hold_time=0.42,
+        touch_reset_resist=0.38,
+        mistake_rate=0.34,
+        mechanical_variance=0.36,
+        defense_turn_hysteresis=0.12,
+        support_repath_cooldown=0.30,
+    ),
+    "diamond": HumanStyleSettings(
+        decisiveness=0.70,
+        takeover_bias=0.13,
+        role_stability=0.68,
+        commit_hold_time=0.48,
+        touch_reset_resist=0.45,
+        mistake_rate=0.24,
+        mechanical_variance=0.28,
+        defense_turn_hysteresis=0.10,
+        support_repath_cooldown=0.32,
+    ),
+    "champion": HumanStyleSettings(
+        decisiveness=0.80,
+        takeover_bias=0.14,
+        role_stability=0.78,
+        commit_hold_time=0.56,
+        touch_reset_resist=0.54,
+        mistake_rate=0.16,
+        mechanical_variance=0.20,
+        defense_turn_hysteresis=0.08,
+        support_repath_cooldown=0.34,
+    ),
+    "grand_champion": HumanStyleSettings(
+        decisiveness=0.88,
+        takeover_bias=0.15,
+        role_stability=0.86,
+        commit_hold_time=0.64,
+        touch_reset_resist=0.60,
+        mistake_rate=0.10,
+        mechanical_variance=0.12,
+        defense_turn_hysteresis=0.07,
+        support_repath_cooldown=0.36,
+    ),
 }
 
 DEFAULT_SETTINGS_PATH = Path(__file__).resolve().parent.parent / "botimus_settings.ini"
@@ -78,6 +190,13 @@ def _get_float(parser: configparser.ConfigParser, section: str, option: str, fal
 def _get_bool(parser: configparser.ConfigParser, section: str, option: str, fallback: bool) -> bool:
     try:
         return parser.getboolean(section, option, fallback=fallback)
+    except (ValueError, configparser.Error):
+        return fallback
+
+
+def _get_int(parser: configparser.ConfigParser, section: str, option: str, fallback: int) -> int:
+    try:
+        return parser.getint(section, option, fallback=fallback)
     except (ValueError, configparser.Error):
         return fallback
 
@@ -117,6 +236,44 @@ def _resolve_skill(parser: configparser.ConfigParser) -> SkillProfile:
     )
 
 
+def _resolve_human_style(parser: configparser.ConfigParser, preset: str) -> HumanStyleSettings:
+    base = _HUMAN_STYLE_PRESETS.get(preset, _HUMAN_STYLE_PRESETS["champion"])
+
+    def override01(option: str, default: float) -> float:
+        raw = _get_str(parser, "HumanStyle", option, "auto").strip().lower()
+        if raw == "auto":
+            return default
+        try:
+            return _clamp01(float(raw))
+        except ValueError:
+            return default
+
+    def override_clamped(option: str, default: float, lower: float, upper: float) -> float:
+        raw = _get_str(parser, "HumanStyle", option, "auto").strip().lower()
+        if raw == "auto":
+            return default
+        try:
+            return _clamp(float(raw), lower, upper)
+        except ValueError:
+            return default
+
+    return HumanStyleSettings(
+        decisiveness=override01("decisiveness", base.decisiveness),
+        takeover_bias=override_clamped("takeover_bias", base.takeover_bias, -1.0, 1.0),
+        role_stability=override01("role_stability", base.role_stability),
+        commit_hold_time=override_clamped("commit_hold_time", base.commit_hold_time, 0.0, 2.0),
+        touch_reset_resist=override01("touch_reset_resist", base.touch_reset_resist),
+        mistake_rate=override01("mistake_rate", base.mistake_rate),
+        mechanical_variance=override01("mechanical_variance", base.mechanical_variance),
+        defense_turn_hysteresis=override_clamped(
+            "defense_turn_hysteresis", base.defense_turn_hysteresis, 0.0, 0.6
+        ),
+        support_repath_cooldown=override_clamped(
+            "support_repath_cooldown", base.support_repath_cooldown, 0.05, 2.0
+        ),
+    )
+
+
 def default_settings() -> BotSettings:
     return BotSettings(
         reload_interval=1.0,
@@ -142,6 +299,18 @@ def default_settings() -> BotSettings:
             conservative_last_man=True,
             boost_detour_risk=0.35,
         ),
+        human_style=_HUMAN_STYLE_PRESETS["champion"],
+        diagnostics=DiagnosticsSettings(
+            enabled=True,
+            mode="coach_timeline",
+            root_dir="logs/diagnostics",
+            flush_every=60,
+            reset_on_start=True,
+            log_every_tick=True,
+            top_k_alternatives=3,
+            include_snapshots=True,
+            include_opponent_cars=True,
+        ),
     )
 
 
@@ -151,6 +320,7 @@ def load_bot_settings(path: Path | str = DEFAULT_SETTINGS_PATH) -> BotSettings:
 
     defaults = default_settings()
     skill = _resolve_skill(parser)
+    human_style = _resolve_human_style(parser, skill.preset)
 
     mode = _get_str(parser, "Object", "mode", defaults.object_mode.mode).strip().lower()
     if mode not in {"auto", "ball", "puck"}:
@@ -211,6 +381,45 @@ def load_bot_settings(path: Path | str = DEFAULT_SETTINGS_PATH) -> BotSettings:
         boost_detour_risk=_clamp01(_get_float(parser, "Teamplay", "boost_detour_risk", defaults.teamplay.boost_detour_risk)),
     )
 
+    mode = _get_str(parser, "Diagnostics", "mode", defaults.diagnostics.mode).strip().lower()
+    if mode not in {"coach_timeline", "balanced", "event"}:
+        mode = defaults.diagnostics.mode
+
+    diagnostics = DiagnosticsSettings(
+        enabled=_get_bool(parser, "Diagnostics", "enabled", defaults.diagnostics.enabled),
+        mode=mode,
+        root_dir=_get_str(parser, "Diagnostics", "root_dir", defaults.diagnostics.root_dir).strip()
+        or defaults.diagnostics.root_dir,
+        flush_every=max(1, _get_int(parser, "Diagnostics", "flush_every", defaults.diagnostics.flush_every)),
+        reset_on_start=_get_bool(
+            parser, "Diagnostics", "reset_on_start", defaults.diagnostics.reset_on_start
+        ),
+        log_every_tick=_get_bool(
+            parser, "Diagnostics", "log_every_tick", defaults.diagnostics.log_every_tick
+        ),
+        top_k_alternatives=max(
+            1,
+            min(
+                10,
+                _get_int(
+                    parser,
+                    "Diagnostics",
+                    "top_k_alternatives",
+                    defaults.diagnostics.top_k_alternatives,
+                ),
+            ),
+        ),
+        include_snapshots=_get_bool(
+            parser, "Diagnostics", "include_snapshots", defaults.diagnostics.include_snapshots
+        ),
+        include_opponent_cars=_get_bool(
+            parser,
+            "Diagnostics",
+            "include_opponent_cars",
+            defaults.diagnostics.include_opponent_cars,
+        ),
+    )
+
     reload_interval = _get_float(parser, "General", "reload_interval", defaults.reload_interval)
     reload_interval = max(0.2, reload_interval)
 
@@ -219,6 +428,8 @@ def load_bot_settings(path: Path | str = DEFAULT_SETTINGS_PATH) -> BotSettings:
         skill=skill,
         object_mode=object_mode,
         teamplay=teamplay,
+        human_style=human_style,
+        diagnostics=diagnostics,
     )
 
 
@@ -277,6 +488,34 @@ conservative_last_man = true
 
 ; Lower means safer boost choices, higher means greedier boost choices.
 boost_detour_risk = 0.35
+
+[HumanStyle]
+; Set each to auto or a number.
+; decisiveness/role_stability/touch_reset_resist/mistake_rate/mechanical_variance: 0.0-1.0
+; takeover_bias: -1.0 to 1.0 (higher means more likely to take charge when a lane opens)
+; commit_hold_time/support_repath_cooldown: seconds
+; defense_turn_hysteresis: radians
+decisiveness = auto
+takeover_bias = auto
+role_stability = auto
+commit_hold_time = auto
+touch_reset_resist = auto
+mistake_rate = auto
+mechanical_variance = auto
+defense_turn_hysteresis = auto
+support_repath_cooldown = auto
+
+[Diagnostics]
+enabled = true
+; mode: coach_timeline | balanced | event
+mode = coach_timeline
+root_dir = logs/diagnostics
+flush_every = 60
+reset_on_start = true
+log_every_tick = true
+top_k_alternatives = 3
+include_snapshots = true
+include_opponent_cars = true
 """
 
 

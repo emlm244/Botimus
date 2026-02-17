@@ -21,20 +21,17 @@ class SpeedFlipDodgeKickoff(Kickoff):
         car = self.car
         if self.phase == 1:
             if norm(car.velocity) > 800:
-                self.action = SpeedFlip(car, right_handed=local(car, self.info.ball.position)[1] < 0)
-                self.phase = 2
+                self.set_phase_action(2, SpeedFlip(car, right_handed=local(car, self.info.ball.position)[1] < 0))
                 self._speed_flip_start_time = car.time
 
         if self.phase == 2:
             if self.action.finished and self.car.on_ground:
-                self.action = self.drive
                 self.drive.target_pos = vec3(0, 0, 0)
-                self.phase = 3
+                self.set_phase_action(3, self.drive)
 
         if self.phase == 3:
             if ground_distance(self.car, vec3(0, 0, 0)) < 500:
-                self.action = AirDodge(car, 0.1, vec3(0, 0, 0))
-                self.phase = 4
+                self.set_phase_action(4, AirDodge(car, 0.1, vec3(0, 0, 0)))
                 self.counter_fake_kickoff()
 
         if self.phase == 4:
@@ -42,6 +39,7 @@ class SpeedFlipDodgeKickoff(Kickoff):
                 self.finished = True
 
         # abort when taking too long
-        if car.time > self._speed_flip_start_time + 3.0: self.finished = True
+        if car.time > self._speed_flip_start_time + 3.0:
+            self.finished = True
 
         super().step(dt)

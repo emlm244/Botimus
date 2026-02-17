@@ -19,9 +19,9 @@ class Jump:
 
     def step(self, dt):
 
-        self.controls.jump = 1 if self.timer < self.duration else 0
+        self.controls.jump = self.timer < self.duration
 
-        if self.controls.jump == 0:
+        if not self.controls.jump:
             self.counter += 1
 
         self.timer += dt

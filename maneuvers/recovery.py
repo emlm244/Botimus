@@ -58,7 +58,8 @@ class Recovery(Maneuver):
         for i in range(int(simulation_duration / dt)):
             pos += vel * dt
             vel += grav * dt
-            if norm(vel) > 2300: vel = normalize(vel) * 2300
+            if norm(vel) > 2300:
+                vel = normalize(vel) * 2300
             self.trajectory.append(vec3(pos))
 
             collision_sphere = sphere(pos, 50)
@@ -71,12 +72,15 @@ class Recovery(Maneuver):
                 break
 
         if self.landing:
+            if collision_normal is None:
+                collision_normal = vec3(0, 0, 1)
             u = collision_normal
             f = normalize(vel - dot(vel, u) * u)
-            l = normalize(cross(u, f))
-            self.reorient.target_orientation = three_vec3_to_mat3(f, l, u)
+            left = normalize(cross(u, f))
+            self.reorient.target_orientation = three_vec3_to_mat3(f, left, u)
         else:
-            target_direction = normalize(normalize(self.car.velocity) - vec3(0, 0, 3))
+            target_velocity = self.car.velocity if norm(self.car.velocity) > 1 else self.car.forward() * 500
+            target_direction = normalize(normalize(target_velocity) - vec3(0, 0, 3))
             self.reorient.target_orientation = look_at(target_direction, vec3(0, 0, 1))
 
     def render(self, draw: DrawingTool):

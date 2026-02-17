@@ -20,7 +20,7 @@ class DodgeStrike(Strike):
             return False
         return ball.position[2] < self.info.object_ground_cutoff
 
-    def __init__(self, car, info, target=None):
+    def __init__(self, car: Car, info, target=None):
         self.dodge = AimDodge(car, 0.1, info.ball.position)
         self.dodging = False
 
@@ -47,9 +47,10 @@ class DodgeStrike(Strike):
         self.arrive.target = intercept.ground_pos - hit_dir * hit_offset
         self.arrive.target_direction = hit_dir
 
-        self.dodge.jump.duration = self.get_jump_duration(ball.position[2])
+        jump_duration = self.get_jump_duration(ball.position[2])
+        self.dodge.jump.duration = jump_duration
         self.dodge.target = intercept.ball.position
-        self.arrive.additional_shift = self.get_jump_duration(ball.position[2]) * 1000
+        self.arrive.additional_shift = jump_duration * 1000
 
     def interruptible(self) -> bool:
         if self.info.ball.position[2] > self.info.object_rest_height + 60 and self.dodging:
@@ -66,8 +67,11 @@ class DodgeStrike(Strike):
                 self.arrive.arrival_time - self.car.time < self.dodge.jump.duration + 0.13
                 and abs(self.arrive.drive.target_speed - norm(self.car.velocity)) < 1000
                 and (
-                    dot(normalize(self.car.velocity), ground_direction(self.car, self.arrive.target)) > 0.95
-                    or norm(self.car.velocity) < 500
+                    norm(self.car.velocity) < 500
+                    or (
+                        norm(self.car.velocity) > 1
+                        and dot(normalize(self.car.velocity), ground_direction(self.car, self.arrive.target)) > 0.95
+                    )
                 )
             ):
                 self.dodging = True

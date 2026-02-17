@@ -50,11 +50,12 @@ class Travel(Maneuver):
         target = ground(self.target)
 
         car_speed = norm(car.velocity)
-        time_left = (ground_distance(car, target) - self.finish_distance) / max(car_speed + 500, 1400)
+        distance_to_target = ground_distance(car, target)
+        time_left = max(0.0, (distance_to_target - self.finish_distance) / max(car_speed + 500, 1400))
         forward_speed = dot(car.forward(), car.velocity)
 
         if self.driving and car.on_ground:
-            self.action.target_pos = target
+            self.drive.target_pos = target
             self._time_on_ground += dt
 
             # check if it's a good idea to dodge, wavedash or halfflip
@@ -62,6 +63,7 @@ class Travel(Maneuver):
                 self._time_on_ground > 0.2
                 and car.position[2] < 200
                 and car_speed < 2000
+                and distance_to_target > self.finish_distance
                 and angle_to(car, target, backwards=forward_speed < 0) < 0.1
                 and Game.gravity[2] < -500  # don't dodge in low gravity
             ):
@@ -73,7 +75,6 @@ class Travel(Maneuver):
                         if time_left > self.DODGE_DURATION:
                             dodge = Dodge(car)
                             dodge.jump_duration = 0.07
-                            dodge.delay
                             dodge.direction = vec2(direction(car, target))
                             self.action = dodge
                             self.driving = False
@@ -112,7 +113,7 @@ class Travel(Maneuver):
 
     def render(self, draw: DrawingTool):
         if self.driving:
-            self.action.render(draw)
+            self.drive.render(draw)
 
         draw.color(draw.orange)
         draw.crosshair(self.target)

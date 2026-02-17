@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from maneuvers.strikes.strike import Strike
 from rlutilities.linear_algebra import vec3, norm, normalize, look_at, dot, xy
@@ -20,7 +20,7 @@ class AerialStrike(Strike):
     MAXIMAL_HEIGHT_TIME = 1.5
     DOUBLE_JUMP = False
 
-    def __init__(self, car: Car, info: GameInfo, target: vec3 = None):
+    def __init__(self, car: Car, info: GameInfo, target: Optional[vec3] = None):
         self.aerial = Aerial(car)
         self.aerial.angle_threshold = 0.8
         self.aerial.double_jump = self.DOUBLE_JUMP
@@ -55,7 +55,8 @@ class AerialStrike(Strike):
         test_aerial.up = aerial.up
         test_aerial.double_jump = aerial.double_jump
 
-        if flight_path: flight_path.clear()
+        if flight_path:
+            flight_path.clear()
 
         while not test_aerial.finished:
             test_aerial.step(1 / 120)
@@ -72,6 +73,7 @@ class AerialStrike(Strike):
 
     def step(self, dt):
         time_left = self.aerial.arrival_time - self.car.time
+        safe_time_left = max(time_left, 0.01)
 
         if self.aerialing:
             to_ball = direction(self.car, self.info.ball)
@@ -103,7 +105,7 @@ class AerialStrike(Strike):
             simulated_car = self.simulate_flight(self.car, self.aerial, self._flight_path)
 
             speed_towards_target = dot(self.car.velocity, ground_direction(self.car, self.aerial.target_position))
-            speed_needed = ground_distance(self.car, self.aerial.target_position) / time_left
+            speed_needed = ground_distance(self.car, self.aerial.target_position) / safe_time_left
 
             # too fast, slow down
             if speed_towards_target > speed_needed and angle_to(self.car, self.aerial.target_position) < 0.1:
@@ -118,8 +120,13 @@ class AerialStrike(Strike):
                         future_car = Car(self.car)
                         time = 0.5
                         future_car.time += time
-                        displacement = future_car.velocity * time if norm(future_car.velocity) > 500\
-                            else normalize(future_car.velocity) * 500 * time
+                        future_speed = norm(future_car.velocity)
+                        if future_speed > 500:
+                            displacement = future_car.velocity * time
+                        elif future_speed > 1:
+                            displacement = normalize(future_car.velocity) * 500 * time
+                        else:
+                            displacement = future_car.forward() * 500 * time
                         future_car.position += displacement
 
                         # simulate aerial fot the extrapolated car again

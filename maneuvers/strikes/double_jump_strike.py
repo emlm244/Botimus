@@ -1,8 +1,10 @@
+from typing import Optional
+
 from maneuvers.driving.drive import Drive
 from maneuvers.strikes.strike import Strike
-from rlutilities.linear_algebra import vec3, dot, normalize, look_at
+from rlutilities.linear_algebra import vec3, dot, normalize, look_at, norm
 from rlutilities.mechanics import Reorient
-from rlutilities.simulation import Car, Input
+from rlutilities.simulation import Car, Ball, Input
 from tools.game_info import GameInfo
 from tools.intercept import Intercept
 from tools.vector_math import ground_distance, ground, ground_direction, direction
@@ -15,10 +17,10 @@ ALLOWED_TIME_ERROR = 0.1
 
 class DoubleJumpStrike(Strike):
 
-    def intercept_predicate(self, car, ball):
+    def intercept_predicate(self, car: Car, ball: Ball):
         return 250 < ball.position[2] < 550
 
-    def __init__(self, car: Car, info: GameInfo, target=None):
+    def __init__(self, car: Car, info: GameInfo, target: Optional[vec3] = None):
         self.drive = Drive(car)
         self.reorient = Reorient(car)
 
@@ -69,14 +71,21 @@ class DoubleJumpStrike(Strike):
                 # decide when to jump
                 ground_vel = ground(self.car.velocity)
                 direction_to_target = ground_direction(self.car.position, self.intercept.position)
-                alignment = dot(normalize(ground_vel), direction_to_target)
+                alignment = 0.0
+                if norm(ground_vel) > 1:
+                    alignment = dot(normalize(ground_vel), direction_to_target)
                 # check alignment
                 if alignment >= MIN_ALIGNMENT:
                     # check that speed is correct
                     speed_in_direction = dot(ground_vel, direction_to_target)
-                    time_to_target = distance_to_target / speed_in_direction
-                    if self.time_for_jump - ALLOWED_TIME_ERROR <= time_to_target <= self.time_for_jump + ALLOWED_TIME_ERROR:
-                        self.jumping = True
+                    if speed_in_direction > 1:
+                        time_to_target = distance_to_target / speed_in_direction
+                        if (
+                            self.time_for_jump - ALLOWED_TIME_ERROR
+                            <= time_to_target
+                            <= self.time_for_jump + ALLOWED_TIME_ERROR
+                        ):
+                            self.jumping = True
 
             # after jump (when the car is in the air)
             else:

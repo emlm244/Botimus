@@ -6,9 +6,8 @@ from tools.game_info import GameInfo
 
 def any_clear(info: GameInfo, car: Car) -> Strike:
     skill = info.settings.skill
-    clears = [
+    clears: list[Strike] = [
         DodgeClear(car, info),
-        # DoubleJumpClear(car, info)
     ]
 
     if (
@@ -17,7 +16,6 @@ def any_clear(info: GameInfo, car: Car) -> Strike:
         and skill.consistency > 0.55
         and car.boost > 35
     ):
-        # clears.append(AerialClear(car, info))
         clears.append(FastAerialClear(car, info))
 
     return min(clears, key=lambda clear: clear.intercept.time)

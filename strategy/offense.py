@@ -6,7 +6,6 @@ from maneuvers.strikes.close_shot import CloseShot
 from maneuvers.strikes.dodge_strike import DodgeStrike
 from maneuvers.strikes.ground_strike import GroundStrike
 from maneuvers.strikes.mirror_strike import MirrorStrike
-from maneuvers.strikes.strike import Strike
 from rlutilities.linear_algebra import vec3
 from rlutilities.simulation import Car
 from tools.game_info import GameInfo
@@ -14,7 +13,7 @@ from tools.intercept import Intercept
 from tools.vector_math import distance, ground_distance, align
 
 
-def direct_shot(info: GameInfo, car: Car, target: vec3) -> Strike:
+def direct_shot(info: GameInfo, car: Car, target: vec3) -> Maneuver:
     dodge_shot = DodgeStrike(car, info, target)
     ground_shot = GroundStrike(car, info, target)
     skill = info.settings.skill
@@ -26,10 +25,7 @@ def direct_shot(info: GameInfo, car: Car, target: vec3) -> Strike:
         and skill.consistency > 0.55
         and car.boost > 35
     ):
-        # aerial_strike = AerialStrike(car, info, target)
-        fast_aerial = FastAerialStrike(car, info, target)
-
-        better_aerial_strike = min([fast_aerial], key=lambda strike: strike.intercept.time)
+        better_aerial_strike = FastAerialStrike(car, info, target)
 
         if (
             better_aerial_strike.intercept.time < dodge_shot.intercept.time
@@ -90,7 +86,10 @@ def any_shot(info: GameInfo, car: Car, target: vec3, intercept: Intercept, allow
 
 
 def is_opponent_close(info: GameInfo, dist: float) -> bool:
+    ball = info.ball
+    if ball is None:
+        return False
     for opponent in info.get_opponents():
-        if ground_distance(opponent.position + opponent.velocity * 0.5, info.ball) < dist:
+        if ground_distance(opponent.position + opponent.velocity * 0.5, ball) < dist:
             return True
     return False

@@ -25,14 +25,14 @@ class Arrive(Maneuver):
         self.travel.drive.backwards = False
         self.action = self.drive
 
-        self.target_direction: Optional[None] = None
-        self.target: vec3 = None
+        self.target_direction: Optional[vec3] = None
+        self.target: vec3 = vec3(0, 0, 0)
         self.arrival_time: float = 0
         self.backwards: bool = False
 
         self.lerp_t = 0.56
         self.allow_dodges_and_wavedashes: bool = True
-        self.additional_shift = 0
+        self.additional_shift: float = 0.0
         self.asap = False
 
     def interruptible(self) -> bool:

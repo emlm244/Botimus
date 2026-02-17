@@ -8,7 +8,7 @@ from rlutilities.simulation import Car, Ball
 from tools.drawing import DrawingTool
 from tools.game_info import GameInfo
 from tools.intercept import Intercept
-from tools.vector_math import ground_direction
+from tools.vector_math import ground_direction, ground
 
 
 class Strike(Maneuver):
@@ -17,14 +17,14 @@ class Strike(Maneuver):
     stop_updating = 0.1
     max_additional_time = 0.4
 
-    def __init__(self, car: Car, info: GameInfo, target: vec3 = None):
+    def __init__(self, car: Car, info: GameInfo, target: Optional[vec3] = None):
         super().__init__(car)
 
         self.info: GameInfo = info
-        self.target: Optional[vec3] = target
+        self.target: vec3 = target if target is not None else ground(info.their_goal.center)
 
         self.arrive = Arrive(car)
-        self.intercept: Intercept = None
+        self.intercept: Intercept = Intercept(self.car, [])
 
         self._has_drawn_prediction = False
         self._last_update_time = car.time
@@ -33,7 +33,7 @@ class Strike(Maneuver):
         self.update_intercept()
         self._initial_time = self.intercept.time
 
-    def intercept_predicate(self, car: Car, ball: Ball):
+    def intercept_predicate(self, car: Car, ball: Ball) -> bool:
         return True
 
     def configure(self, intercept: Intercept):
@@ -89,7 +89,7 @@ class Strike(Maneuver):
         draw.circle(self.intercept.ground_pos, self.info.object_render_radius)
         draw.point(self.intercept.ball.position)
 
-        if self.target:
+        if self.target is not None:
             strike_direction = ground_direction(self.intercept.ground_pos, self.target)
             draw.color(draw.cyan)
             draw.triangle(self.intercept.ground_pos + strike_direction * 150, strike_direction, length=100)

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Optional
 
 from data.lookup_table import LookupTable
 
@@ -28,19 +29,23 @@ class AccelerationLUT(LookupTable):
 
     def simulate_until_limit(self,
                              initial_speed: float,
-                             time_limit: float = None,
-                             distance_limit: float = None,
-                             speed_limit: float = None) -> LookupResult:
+                             time_limit: Optional[float] = None,
+                             distance_limit: Optional[float] = None,
+                             speed_limit: Optional[float] = None) -> LookupResult:
 
         # at least one limit must be set
-        assert time_limit or distance_limit or speed_limit
+        assert time_limit is not None or distance_limit is not None or speed_limit is not None
 
         # limits must be positive
-        if time_limit: assert time_limit > 0
-        if speed_limit: assert speed_limit > 0
-        if distance_limit: assert distance_limit > 0
+        if time_limit is not None:
+            assert time_limit > 0
+        if speed_limit is not None:
+            assert speed_limit > 0
+        if distance_limit is not None:
+            assert distance_limit > 0
 
-        if speed_limit: assert speed_limit > initial_speed
+        if speed_limit is not None:
+            assert speed_limit > initial_speed
 
         starting_index = self.find_index(self.speeds, initial_speed)
         # TODO: Interpolate
@@ -50,21 +55,37 @@ class AccelerationLUT(LookupTable):
         last_index = len(self.times) - 1
         time_limit_index = distance_limit_index = speed_limit_index = last_index
 
-        if time_limit: time_limit_index = self.find_index(self.times, initial_time + time_limit)
-        if distance_limit: distance_limit_index = self.find_index(self.distances, initial_distance + distance_limit)
-        if speed_limit: speed_limit_index = self.find_index(self.speeds, speed_limit)
+        if time_limit is not None:
+            time_limit_index = self.find_index(self.times, initial_time + time_limit)
+        if distance_limit is not None:
+            distance_limit_index = self.find_index(self.distances, initial_distance + distance_limit)
+        if speed_limit is not None:
+            speed_limit_index = self.find_index(self.speeds, speed_limit)
 
         final_index = min(time_limit_index, distance_limit_index, speed_limit_index)  # use the soonest reached limit
-        if final_index < starting_index: final_index = starting_index
+        if final_index < starting_index:
+            final_index = starting_index
 
         # TODO: Interpolate values
         return self.LookupResult(
             speed_reached=self.speeds[final_index],
             time_passed=self.times[final_index] - initial_time,
             distance_traveled=self.distances[final_index] - initial_distance,
-            distance_limit_reached=distance_limit and final_index == distance_limit_index < last_index,
-            speed_limit_reached=speed_limit and final_index == speed_limit_index < last_index,
-            time_limit_reached=time_limit and final_index == time_limit_index < last_index
+            distance_limit_reached=(
+                distance_limit is not None
+                and final_index == distance_limit_index
+                and final_index < last_index
+            ),
+            speed_limit_reached=(
+                speed_limit is not None
+                and final_index == speed_limit_index
+                and final_index < last_index
+            ),
+            time_limit_reached=(
+                time_limit is not None
+                and final_index == time_limit_index
+                and final_index < last_index
+            ),
         )
 
 

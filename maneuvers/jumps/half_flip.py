@@ -47,9 +47,9 @@ class HalfFlip:
             self.controls.yaw = self.s
 
         if self.use_boost and self.timer > boost_delay:
-            self.controls.boost = 1
+            self.controls.boost = True
         else:
-            self.controls.boost = 0
+            self.controls.boost = False
 
         self.timer += dt
 

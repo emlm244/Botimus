@@ -2,7 +2,7 @@ from typing import Optional
 
 from maneuvers.jumps.jump import Jump
 from maneuvers.maneuver import Maneuver
-from rlutilities.linear_algebra import vec3, dot, normalize, sgn
+from rlutilities.linear_algebra import vec3, dot, normalize, sgn, norm
 
 # Most of this class is from the old RLUtilities, made by chip.
 # The dodge in the new RLUtilities is a bit different, and my shot mechanics are tuned for this one, so I kept it.
@@ -53,7 +53,10 @@ class AirDodge(Maneuver):
                     target_local = dot(self.target - self.car.position, self.car.orientation)
                     target_local[2] = 0
 
-                    target_direction = normalize(target_local)
+                    if norm(target_local) > 1:
+                        target_direction = normalize(target_local)
+                    else:
+                        target_direction = vec3(1, 0, 0)
 
                     self.controls.roll = 0
                     self.controls.pitch = -target_direction[0]
@@ -64,15 +67,14 @@ class AirDodge(Maneuver):
                         self.controls.yaw = clamp11(self.controls.yaw * 5)
 
             elif self.counter == 2:
-
-                self.controls.jump = 1
+                self.controls.jump = True
 
             elif self.counter >= 4:
 
                 self.controls.roll = 0
                 self.controls.pitch = 0
                 self.controls.yaw = 0
-                self.controls.jump = 0
+                self.controls.jump = False
 
             self.counter += 1
             self.state_timer += dt
