@@ -1,0 +1,31 @@
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [
+    "rlutilities",
+    "rlutilities/assets",
+    "__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+
+[tool.mypy]
+python_version = "3.12"
+files = [
+    "harness",
+    "local_checks/run_rlbot_smoke.py",
+    "tests",
+    "tools/adapters",
+    "tools/bot_settings.py",
+]
+mypy_path = "typings"
+exclude = "(^data[\\\\/]|^rlutilities[\\\\/])"
+warn_unused_configs = true
+ignore_missing_imports = true
+follow_imports = "skip"
+strict = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
