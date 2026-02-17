@@ -24,7 +24,7 @@ jobs:
           python -m pip install -r requirements-dev.txt
 
       - name: Compile
-        run: python -m compileall agent.py hivemind.py strategy tools maneuvers harness tests
+        run: python -m compileall agent.py strategy tools maneuvers harness tests
 
       - name: Ruff
         run: ruff check .

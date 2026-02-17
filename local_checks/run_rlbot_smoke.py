@@ -14,7 +14,7 @@ def main() -> int:
     root = Path(__file__).resolve().parent.parent
     print(f"Running local smoke checks in mode={args.mode}")
 
-    compile_cmd = [sys.executable, "-m", "compileall", "agent.py", "hivemind.py", "strategy", "tools", "maneuvers"]
+    compile_cmd = [sys.executable, "-m", "compileall", "agent.py", "strategy", "tools", "maneuvers"]
     result = subprocess.run(compile_cmd, cwd=root, check=False)
     if result.returncode != 0:
         return result.returncode

@@ -14,14 +14,14 @@ Goals:
 
 ## Session Bootstrap (Read First)
 1. Confirm this folder is the Botimus package root.
-2. Read `agent.py` and `hivemind.py` first to identify execution mode.
+2. Read `agent.py` first (this local install is Botimus Prime only).
 3. Use the file map below to jump to the relevant strategy or maneuver.
 4. Check "Known Constraints" before changing behavior.
 5. If planning major work, start from "Prioritized Opportunities".
 
 ## What This Bot Is
 - `Botimus Prime`: single-process agent for 1v1/standard play (`botimus.cfg` -> `agent.py`).
-- `Bumblebee`: hivemind flavor intended to coordinate multiple copies (`bumblebee.cfg` -> `drone_agent.py` -> `hivemind.py`).
+- Local status: Bumblebee/hivemind files were removed from this install on 2026-02-17.
 - Core style: hardcoded tactical bot with physics prediction, maneuver selection, and modular mechanics.
 
 ## Runtime Entry Points
@@ -32,17 +32,8 @@ Goals:
     - Reset/cancel maneuvers on kickoff and opponent touches.
     - Choose maneuver via `strategy.solo_strategy` or `strategy.teamplay_strategy`.
     - Step maneuver, render debug, return controls.
-- `hivemind.py`
-  - Class: `Beehive(PythonHivemind)`
-  - Multi-drone loop:
-    - Shared `GameInfo`.
-    - Per-drone maneuver assignment using `HivemindStrategy`.
-    - Kickoff role assignment, boost reservations, bump/demo avoidance.
-- `drone_agent.py`
-  - Connects drones to hive (`hive_key = "bumblebee-hive"`).
 - Config files:
   - `botimus.cfg` (single bot)
-  - `bumblebee.cfg` (hivemind bot)
 
 ## High-Level Decision Model
 - Recovery-first:
@@ -50,7 +41,7 @@ Goals:
 - Kickoff handling:
   - Ball at `(0,0)` triggers kickoff logic.
   - Single bot chooses kickoff by spawn position.
-  - Team/hivemind assigns roles by nearest-to-ball and defensive needs.
+  - Teamplay strategy assigns roles by nearest-to-ball and defensive needs.
 - Ball touch invalidation:
   - On new opponent touch, interruptible maneuvers are cleared.
 - Intercept-driven planning:
@@ -63,8 +54,8 @@ Goals:
   - 1v1 policy: recovery, kickoff, danger clears, shot windows, boost grabs, fallback defense.
 - `strategy/teamplay_strategy.py`
   - Multi-teammate non-hivemind policy: nearest-player kickoff and role-by-intercept decisions.
-- `strategy/hivemind_strategy.py`
-  - Explicit role orchestration for multiple controlled drones.
+- `strategy/teamplay_context.py`
+  - Shared role/context model for 2v2 and 3v3 positioning and support logic.
 - `strategy/offense.py`
   - Shot selection entry points (`direct_shot`, `any_shot`).
 - `strategy/defense.py`
@@ -104,8 +95,6 @@ Goals:
   - Math helpers used nearly everywhere.
 - `tools/drawing.py`
   - Rendering helper with grouping and draw-item limits.
-- `tools/drone.py`
-  - Drone state + conversion to `PlayerInput`.
 - `tools/arena.py`
   - Arena clamp and bounds checks.
 - `tools/jump_sim.py`
@@ -146,7 +135,7 @@ Use these first when behavior changes are needed:
 - Ball prediction cost:
   - Many paths call `predict_ball`; expensive retuning can affect frame budget.
 - Collision avoidance simplicity:
-  - Hivemind bump/demo avoidance is heuristic and can produce false positives/late jumps.
+  - Team bump/demo avoidance is still heuristic and can produce false positives/late jumps.
 - Strike viability:
   - Some strike classes are sensitive to narrow timing windows and orientation assumptions.
 - Legacy TODOs in code:
@@ -155,9 +144,9 @@ Use these first when behavior changes are needed:
 ## Fast Debug Playbook
 
 ### "Why did it choose this maneuver?"
-1. Start at `agent.py` or `hivemind.py`.
+1. Start at `agent.py`.
 2. Check reset conditions (kickoff/touch/demo).
-3. Trace into strategy chooser (`solo_strategy.py`, `teamplay_strategy.py`, or `hivemind_strategy.py`).
+3. Trace into strategy chooser (`solo_strategy.py` or `teamplay_strategy.py`).
 4. Inspect resulting maneuver's `interruptible()` and `finished` behavior.
 
 ### "Why did it miss the ball?"
@@ -167,9 +156,9 @@ Use these first when behavior changes are needed:
 4. Review dodge/jump trigger conditions in specific strike.
 
 ### "Why is team coordination weak?"
-1. Inspect `HivemindStrategy.set_maneuvers`.
-2. Check `drone_going_for_ball`, `defending_drone`, and boost reservation lifecycle.
-3. Review `avoid_demos_and_team_bumps` logic and jump conditions.
+1. Inspect `strategy/teamplay_context.py` role assignment outputs.
+2. Check `strategy/teamplay_strategy.py` takeover/commit gating and support positioning.
+3. Review teammate spacing and bump avoidance checks in teamplay decisions.
 
 ## Rocket League Bot Context (Practical)
 - This codebase is a hardcoded/mechanics-heavy bot architecture (not an end-to-end ML policy runtime).
@@ -193,23 +182,23 @@ Use these first when behavior changes are needed:
 - First step:
   - Add explicit confidence scoring for candidate intercepts (time margin vs opponents, angle quality, recovery cost).
 
-### 2) Strengthen hivemind coordination and collision avoidance
-- Impact: High (for 2v2/3v3 Bumblebee)
+### 2) Strengthen 2v2/3v3 coordination and collision avoidance
+- Impact: High (for teamplay reliability)
 - Effort: Medium
 - Risk: Medium
 - Primary files:
-  - `strategy/hivemind_strategy.py`
+  - `strategy/teamplay_strategy.py`
+  - `strategy/teamplay_context.py`
   - `tools/game_info.py`
-  - `tools/drone.py`
 - First step:
-  - Replace binary jump-avoidance with role-aware avoidance priorities and configurable safety envelopes.
+  - Expand role-aware avoidance priorities and configurable safety envelopes.
 
 ### 3) Build a repeatable evaluation harness
 - Impact: High (development speed, regression control)
 - Effort: Medium
 - Risk: Low
 - Primary files:
-  - New scripts + optional lightweight logging hooks in `agent.py`/`hivemind.py`
+  - New scripts + optional lightweight logging hooks in `agent.py`
 - First step:
   - Define 5-10 canonical scenarios (kickoff, goal-line clear, wall read, boost starvation) and track success rates.
 
@@ -328,3 +317,32 @@ When major work is done, append a brief note:
   - `python -m harness.runner --mode puck --report artifacts/puck_report.json`
 - Open issues / next step:
   - Add optional replay-log based backtesting layer if future regression depth is needed beyond deterministic scenarios.
+
+### Session Note
+- Date: 2026-02-17
+- Goal worked on: Disable/remove Bumblebee so RLBot GUI only exposes Botimus Prime.
+- Files changed:
+  - Deleted: `bumblebee.cfg`
+  - Deleted: `bumblebee-appearance.cfg`
+  - Deleted: `bumblebee-logo.png`
+  - Deleted: `drone_agent.py`
+  - Deleted: `hivemind.py`
+  - Deleted: `goal_explosion_randomizer.py`
+  - Deleted: `strategy/hivemind_strategy.py`
+  - Deleted: `tools/drone.py`
+  - Updated: `local_checks/run_rlbot_smoke.py`
+  - Updated: `.github/workflows/ci.yml`
+  - Updated: `AGENTS.md`
+- Behavior changed:
+  - This local package is now Botimus Prime only; Bumblebee/hivemind runtime path is removed.
+  - RLBot GUI should no longer list Bumblebee from this folder.
+- Validation performed:
+  - `python -m compileall agent.py strategy tools maneuvers harness tests`
+  - `ruff check .`
+  - `mypy`
+  - `pytest`
+  - `python -m harness.runner --mode ball --report artifacts/ball_report.json`
+  - `python -m harness.runner --mode puck --report artifacts/puck_report.json`
+  - `rg -n "hivemind|drone_agent|bumblebee|goal_explosion_randomizer|hive_key|Beehive|hivemind_strategy|tools\.drone" -S --glob "!AGENTS.md" .` (no matches)
+- Open issues / next step:
+  - Restart/refresh RLBot GUI if Bumblebee is still cached in the UI.
